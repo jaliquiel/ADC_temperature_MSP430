@@ -15,36 +15,16 @@
 void swDelay(char numLoops);
 
 // Declare globals here
+long unsigned int timer_cnt = 0;
+int i;
 
 // Main
 void main(void)
 
 {
-    unsigned char currKey=0, dispSz = 3;
-    unsigned char dispThree[3];
-
-    // Define some local variables
-    float a_flt = 190.68;
-    int  test = 0x0600, i=0;     // In C prefix 0x means the number that follows is in hex
-    long unsigned X= 123456;    // No prefix so number is assumed to be in decimal
-    unsigned char myGrade='A';
-    unsigned char initial='S';
-    //unsigned char your_name[14] = "Your Name Here";
-                                    // What happens when you change the array length?
-                                    // What should it be? Do you need null terminator /n ?
-
-
     WDTCTL = WDTPW | WDTHOLD;    // Stop watchdog timer. Always need to stop this!!
                                  // You can then configure it properly, if desired
 
-    // Some utterly useless instructions -- Step through them
-    // What size does the Code Composer MSP430 Compiler use for the
-    // following variable types? A float, an int, a long integer and a char?
-    a_flt = a_flt*test;
-    X = test+X;
-    test = test-myGrade;    // A number minus a letter?? What's actually going on here?
-                            // What value stored in myGrade (i.e. what's the ASCII code for "A")?
-                            // Thus, what is the new value of test? Explain?
 
     // Useful code starts here
     initLeds();
@@ -59,49 +39,53 @@ void main(void)
     Graphics_drawStringCentered(&g_sContext, "Welcome", AUTO_STRING_LENGTH, 48, 15, TRANSPARENT_TEXT);
     Graphics_drawStringCentered(&g_sContext, "to", AUTO_STRING_LENGTH, 48, 25, TRANSPARENT_TEXT);
     Graphics_drawStringCentered(&g_sContext, "ECE2049-C20!", AUTO_STRING_LENGTH, 48, 35, TRANSPARENT_TEXT);
-
-    // Draw a box around everything because it looks nice
-    Graphics_Rectangle box = {.xMin = 5, .xMax = 91, .yMin = 5, .yMax = 91 };
-    Graphics_drawRectangle(&g_sContext, &box);
-
-    // We are now done writing to the display.  However, if we stopped here, we would not
-    // see any changes on the actual LCD.  This is because we need to send our changes
-    // to the LCD, which then refreshes the display.
-    // Since this is a slow operation, it is best to refresh (or "flush") only after
-    // we are done drawing everything we need.
+    //refreshes display
     Graphics_flushBuffer(&g_sContext);
-
-    dispThree[0] = ' ';
-    dispThree[2] = ' ';
 
     while (1)    // Forever loop
     {
-        // Check if any keys have been pressed on the 3x4 keypad
-        currKey = getKey();
-        if (currKey == '*')
-            BuzzerOn();
-        if (currKey == '#')
-            BuzzerOff();
-        if ((currKey >= '0') && (currKey <= '9'))
-            setLeds(currKey - 0x30);
 
-        if (currKey)
-        {
-            dispThree[1] = currKey;
-            // Draw the new character to the display
-            Graphics_drawStringCentered(&g_sContext, dispThree, dispSz, 48, 55, OPAQUE_TEXT);
 
-            // Refresh the display so it shows the new data
-            Graphics_flushBuffer(&g_sContext);
-
-            // wait awhile before clearing LEDs
-            swDelay(1);
-            setLeds(0);
-        }
 
     }  // end while (1)
+}   //end main
+
+void getMonth(unsigned int days){
+    if(days <= 31)
+        monthString = "JAN";
+    if(days > 31 && days <= 59)
+        monthString = "FEB";
+    if(days > 59 && days <= 90)
+        monthString = "MAR";
+    if(days > 90 && days <= 120)
+        monthString = "APR";
+    if(days > 120 && days <= 151)
+        monthString = "MAY";
+    if(days > 151 && days <= 181)
+        monthString = "JUN";
+    if(days > 181 && days <= 212)
+        monthString = "JUL";
+    if(days > 212 && days <= 243)
+        monthString = "AUG";
+    if(days > 243 && days <= 273)
+        monthString = "SEP";
+    if(days > 273 && days <= 304)
+        monthString = "OCT";
+    if(days > 304 && days <= 334)
+        monthString = "NOV";
+    if(days > 334 && days <= 365)
+        monthString = "DEC";
+    else
+        days = 0;
 }
 
+void displayTime(void){
+    //...
+}
+
+void displayTemp(void){
+    //...
+}
 
 void swDelay(char numLoops)
 {
@@ -122,4 +106,30 @@ void swDelay(char numLoops)
    	    while (i > 0)				// could also have used while (i)
 	       i--;
     }
+}
+
+void runTimerA2(){
+    TA2CTL = TASSEL_1 + ID_0 + MC_1;
+    TA2CCR0 = 163; // interrupt every 0.005
+    TA2CCTL0 = CCIE;
+}
+
+void stopTimerA2(int reset){
+    TA2CTL = MC_0; // stop timer
+    TA2CCTL0 &= ~CCIE; // TA2CCR0 interrupt disabled
+    if(reset)
+        timer_cnt=0;
+}
+
+//------------------------------------------------------------------------------
+// Timer2 A2 Interrupt Service Routine
+//------------------------------------------------------------------------------
+#pragma vector=TIMER2_A0_VECTOR
+__interrupt void TIMER_A2_ISR (void)
+{
+    // Display is using Timer A1
+    // Not sure where Timer A1 is configured?
+//    Sharp96x96_SendToggleVCOMCommand();  // display needs this toggle < 1 per sec
+    timer_cnt++;
+
 }
