@@ -79,12 +79,80 @@ void getMonth(unsigned int days){
         days = 0;
 }
 
-void displayTime(void){
-    //...
+void displayTime(long unsigned int timer_cnt)
+{
+    long unsigned int months, days, hours, min, sec, currentCount;
+    char[9] time;
+    char[7] date;
+
+    // save our current time
+    currentCount = timer_cnt;
+
+    // 1 month ~ 87763132800 ticks
+    months = timer_cnt / 87763132800;    
+
+    // 1 day ~ 2831068800 ticks
+    days = (timer_cnt % 87763132800) / 2831068800; 
+
+    // 1 hour ~ 117961200  ticks
+    hours = ((timer_cnt % 87763132800) % 2831068800) / 117961200; 
+ 
+    // 1 minute ~ 1966020 ticks  
+    min = (((timer_cnt % 87763132800) % 2831068800) % 117961200) / 1966020;
+
+    // 1 second ~ 32767 ticks    
+    sec = ((((timer_cnt % 87763132800) % 2831068800) % 117961200) % 1966020) / 32767;
+   
+    // Make strings
+    makeDate(months, days, date);
+    makeTime(hours, min, sec, time);
+
+    // Display Strings
+    Graphics_drawStringCentered(&g_sContext, date, AUTO_STRING_LENGTH, 48, 25, TRANSPARENT_TEXT);
+    Graphics_drawStringCentered(&g_sContext, time, AUTO_STRING_LENGTH, 48, 25, TRANSPARENT_TEXT);
+    
 }
 
-void displayTemp(void){
-    //...
+void displayTemp(float inAvgTempC)
+{
+    char[8] cString;
+    char[8] fString;
+
+    // get copy of float
+    float celciusTemp = inAvgTempC;
+
+    // Convert celcius to fahrenheit
+    float fahrenTemp = 1.8 * (celciusTemp) + 32;
+    
+    // Make strings
+    makeTemp(celciusTemp, cString, true);
+    makeTemp(farenTemp, fString, false);
+
+    // Display Strings
+    Graphics_drawStringCentered(&g_sContext, cString, AUTO_STRING_LENGTH, 48, 25, TRANSPARENT_TEXT);
+    Graphics_drawStringCentered(&g_sContext, fString, AUTO_STRING_LENGTH, 48, 25, TRANSPARENT_TEXT);
+
+}
+
+// String functions
+void makeDate(long unsigned int month, long unsigned int day, char *s)
+{
+    // ..
+    char[3] monthString;
+    char[3] dayString;
+}
+
+void makeTime(long unsigned int hours, long unsigned int min, long unsigned int sec, char *s)
+{
+    // ..
+    char[3] hourString;
+    char[3] minString;
+    char[3] secString;
+}
+
+void makeTemp(float temperature, char * s, bool isCelsius)
+{
+    // ..
 }
 
 void swDelay(char numLoops)
