@@ -29,6 +29,11 @@ long unsigned int timer_cnt = 0;
 int i;
 long unsigned int seconds;
 
+// variables here
+char date[7] = {0};
+
+
+
 #define secondsInDay 86400
 #define secondsInHour 3600
 #define secondsInMinute 60
@@ -60,17 +65,64 @@ void main(void)
     configDisplay();
     configKeypad();
 
+    // set up temperature sensor *****************************************************
+    volatile float temperatureDegC;
+    volatile float temperatureDegF;
+    volatile float degC_per_bit;
+    volatile unsigned int bits30, bits85;
+
+    REFCTL0 &= ~REFMSTR;    // Reset REFMSTR to hand over control of
+                            // internal reference voltages to
+                            // ADC12_A control registers
+//    ADC12CTL0 = ADC12SHT0_9 | ADC12REFON | ADC12ON | ADC12MSC;     // Internal ref = 1.5V (TODOOOOOOOO UNCOMMENT LATEEER)
+    ADC12CTL0 = ADC12SHT0_9 | ADC12REFON | ADC12ON;     // Internal ref = 1.5V
+
+    ADC12CTL1 = ADC12SHP;                     // Enable sample timer
+    // Using ADC12MEM0 to store reading
+    ADC12MCTL0 = ADC12SREF_1 + ADC12INCH_10;  // ADC i/p ch A10 = temp sense
+                                              // ACD12SREF_1 = internal ref = 1.5v
+    __delay_cycles(100);                    // delay to allow Ref to settle
+    ADC12CTL0 |= ADC12ENC;              // Enable conversion
+    // Use calibration data stored in info memory
+    bits30 = CALADC12_15V_30C;
+    bits85 = CALADC12_15V_85C;
+    degC_per_bit = ((float)(85.0 - 30.0))/((float)(bits85-bits30));
+    // set up temperature sensor *****************************************************
+
+
     // *** Intro Screen ***
     Graphics_clearDisplay(&g_sContext); // Clear the display
 
     seconds = 3500000;
+
+    runTimerA2();
 
     while (1)    // Forever loop
     {
         Graphics_clearDisplay(&g_sContext); // Clear the display
         seconds++;
         displayTime(seconds);
-        //displayTemp(in_temp);
+//        displayTemp(in_temp);
+
+
+        ADC12CTL0 &= ~ADC12SC;  // clear the start bit
+        ADC12CTL0 |= ADC12SC;       // Sampling and conversion start
+                            // Single conversion (single channel)
+        // Poll busy bit waiting for conversion to complete
+        while (ADC12CTL1 & ADC12BUSY)
+            __no_operation();
+        in_temp = ADC12MEM0;      // Read in results if conversion
+
+        // Temperature in Celsius. See the Device Descriptor Table section in the
+        // System Resets, Interrupts, and Operating Modes, System Control Module
+        // chapter in the device user's guide for background information on the
+        // formula.
+        temperatureDegC = (float)((long)in_temp - CALADC12_15V_30C) * degC_per_bit +30.0;
+
+//        // Temperature in Fahrenheit
+//        temperatureDegF = (temperatureDegC * 1.8) + 32;  //conversion formula for celcius to fahrenheit
+        __no_operation();
+
 
     }  // end while (1)
 }   //end main
@@ -78,9 +130,7 @@ void main(void)
 void displayTime(long unsigned int seconds){
     long unsigned int days, hours, min, sec, currSeconds;
     char time[9];
-    char *date[7];
-
-    runTimerA2();
+    char date[7];
 
     unsigned int elapsedSec = timer_cnt;
     // save our current time
@@ -95,22 +145,30 @@ void displayTime(long unsigned int seconds){
     sec = (int)(currSeconds % secondsInMinute);
 
     // Make strings
-    getMonth(days, date);
-    //makeDate(days, date);
-    makeTime(hours, min, sec, time);
+    // getMonth(days, date);
+    memcpy(date, getMonth(days, date), 8);
 
-    char a[7] = "AUG 10\0";
-    char t[8] = "08:45:00\0";
+    //makeDate(days, date);
+//    memcpy(date, getMonth(days, date), 8);
+//
+//    makeTime(hours, min, sec, time);
+
+//    char a[7] = "AUG 10\0";
+    char t[9] = "08:45:00";
 
     // Display Strings
-    Graphics_drawStringCentered(&g_sContext, a, AUTO_STRING_LENGTH, 48, 35, TRANSPARENT_TEXT);
+
+    Graphics_drawStringCentered(&g_sContext, date, AUTO_STRING_LENGTH, 48, 35, TRANSPARENT_TEXT);
     Graphics_drawStringCentered(&g_sContext, t, AUTO_STRING_LENGTH, 48, 45, TRANSPARENT_TEXT);
+    Graphics_flushBuffer(&g_sContext);
+
     //refreshes display
     if(elapsedSec >= 3){
         Graphics_flushBuffer(&g_sContext);
         stopTimerA2(1);
     }
 }
+
 
 void displayTemp(float inAvgTempC){
 
@@ -137,7 +195,10 @@ void displayTemp(float inAvgTempC){
 
 }
 
-char getMonth(unsigned int days, char *date){
+char * getMonth(unsigned int days, char str[]){
+
+    char date[7];
+
     if(days <= daysTilJanEnd){
         date[0] = 'J';
         date[1] = 'A';
@@ -204,6 +265,11 @@ char getMonth(unsigned int days, char *date){
     date[4] = (int)(days / 10) % 10 + '0';
     date[5] = days % 10 + '0';
     date[6] = '\0';
+
+    memcpy(str, date, strlen(date)+1);
+
+    printf("%s",date);
+
     return date;
 }
 
