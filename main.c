@@ -34,6 +34,7 @@ long unsigned int startTime = 0;
 long unsigned int currentTime = 0;
 int i;
 long unsigned int seconds;
+
 int currButton;
 
 // variables here
@@ -70,6 +71,12 @@ enum LCD_STATE {monthS = 0, dayS =1, hourS=2, minuteS=3, secondS=4, display = 5}
 void main(void)
 
 {
+    //    seconds = 3500000;
+//        seconds = 57;
+    //        seconds = 82800;
+
+//    seconds = 345600;
+
     WDTCTL = WDTPW | WDTHOLD;    // Stop watchdog timer. Always need to stop this!!
     __bis_SR_register(GIE); // Global INterrupt enable
 
@@ -115,8 +122,6 @@ void main(void)
     // *** Intro Screen ***
     Graphics_clearDisplay(&g_sContext); // Clear the display
 
-//    seconds = 3500000;
-    seconds = 57;
 
     runTimerA2();
     startTime = timer_cnt;
@@ -181,37 +186,42 @@ void main(void)
 
         case monthS:
             currButton = readButtons();
-            if (currButton == 1){
-                state = display;
-                currButton = NULL;
-            }
             if(currButton == 2){
                 state = dayS;
                 currButton = NULL;
+                // save data
+
             }
 
             // update milliamps variable
             getCurrent(&milliamps);
-            int month = (int) (milliamps * (11/ 99.9) + 1);
+            long unsigned int monthTemp = (int) (milliamps * (11/ 99.9) + 1); // months from 0 to 11
             char monthString[4];
 
             // Make strings
             // makeDate(days, date);
-            memcpy(monthString, getMonth(month), 4+1);
+            memcpy(monthString, getMonth(monthTemp), 4+1);
 
             // Display Strings
             Graphics_clearDisplay(&g_sContext); // Clear the display
             Graphics_drawStringCentered(&g_sContext, "Edit months", AUTO_STRING_LENGTH, 48, 25, TRANSPARENT_TEXT);
             Graphics_drawStringCentered(&g_sContext, monthString, AUTO_STRING_LENGTH, 48, 45, TRANSPARENT_TEXT);
             Graphics_flushBuffer(&g_sContext);
-            break;
 
-        case dayS:
-            currButton = readButtons();
+            // update seconds global and return to display
             if (currButton == 1){
                 state = display;
                 currButton = NULL;
+                long unsigned int days, hours, min, sec;
+                getTime(&days, &hours, &min, &sec);
+                long unsigned int temp = getMonthSeconds2(monthTemp); // 2670400
+                seconds = getMonthSeconds2(monthTemp) + (days - 1) * secondsInDay + hours * secondsInHour + min * secondsInMinute + sec - 3;
             }
+            break;
+
+
+        case dayS:
+            currButton = readButtons();
             if(currButton == 2){
                 state = hourS;
                 currButton = NULL;
@@ -219,12 +229,12 @@ void main(void)
 
             // update milliamps variable
             getCurrent(&milliamps);
-            int days = (int) (milliamps * (30/ 99.9) + 1);
+            long unsigned int daysTemp = (int) (milliamps * (30/ 99.9) + 1);
             char dayString[3];
 
             // Make strings
-            dayString[0] = ( days / 10 ) % 10 + '0';
-            dayString[1] = days % 10 + '0';
+            dayString[0] = ( daysTemp / 10 ) % 10 + '0';
+            dayString[1] = daysTemp % 10 + '0';
             dayString[2] = '\0';
 
             // Display Strings
@@ -232,15 +242,22 @@ void main(void)
             Graphics_drawStringCentered(&g_sContext, "Edit days", AUTO_STRING_LENGTH, 48, 25, TRANSPARENT_TEXT);
             Graphics_drawStringCentered(&g_sContext, dayString, AUTO_STRING_LENGTH, 48, 45, TRANSPARENT_TEXT);
             Graphics_flushBuffer(&g_sContext);
+
+            // update seconds global and return to display
+            if (currButton == 1){
+                state = display;
+                currButton = NULL;
+                long unsigned int days, hours, min, sec;
+                getTime(&days, &hours, &min, &sec);
+                long unsigned int temp = getMonthSeconds(days);
+                temp = (daysTemp - 1) * secondsInDay;
+                seconds = getMonthSeconds(days) + (daysTemp - 1) * secondsInDay + hours * secondsInHour + min * secondsInMinute + sec - 3;
+            }
             break;
 
 
         case hourS:
             currButton = readButtons();
-            if (currButton == 1){
-                state = display;
-                currButton = NULL;
-            }
             if(currButton == 2){
                 state = minuteS;
                 currButton = NULL;
@@ -248,12 +265,12 @@ void main(void)
 
             // update milliamps variable
             getCurrent(&milliamps);
-            int hours = (int) (milliamps * (23/ 99.9));
+            long unsigned int hoursTemp = (int) (milliamps * (23/ 99.9));
             char hourString[3];
 
             // Make strings
-            hourString[0] = ( hours / 10 ) % 10 + '0';
-            hourString[1] = hours % 10 + '0';
+            hourString[0] = ( hoursTemp / 10 ) % 10 + '0';
+            hourString[1] = hoursTemp % 10 + '0';
             hourString[2] = '\0';
 
             // Display Strings
@@ -261,15 +278,20 @@ void main(void)
             Graphics_drawStringCentered(&g_sContext, "Edit hours", AUTO_STRING_LENGTH, 48, 25, TRANSPARENT_TEXT);
             Graphics_drawStringCentered(&g_sContext, hourString, AUTO_STRING_LENGTH, 48, 45, TRANSPARENT_TEXT);
             Graphics_flushBuffer(&g_sContext);
+
+            // update seconds global and return to display
+            if (currButton == 1){
+                state = display;
+                currButton = NULL;
+                long unsigned int days, hours, min, sec;
+                getTime(&days, &hours, &min, &sec);
+                seconds = days * secondsInDay + hoursTemp * secondsInHour + min * secondsInMinute + sec - 3;
+            }
             break;
 
 
         case minuteS:
             currButton = readButtons();
-            if (currButton == 1){
-                state = display;
-                currButton = NULL;
-            }
             if(currButton == 2){
                 state = secondS;
                 currButton = NULL;
@@ -277,12 +299,12 @@ void main(void)
 
             // update milliamps variable
             getCurrent(&milliamps);
-            int minutes = (int) (milliamps * (59/ 99.9));
+            long unsigned int minutesTemp = (int) (milliamps * (59/ 99.9));
             char minuteString[3];
 
             // Make strings
-            minuteString[0] = ( minutes / 10 ) % 10 + '0';
-            minuteString[1] = minutes % 10 + '0';
+            minuteString[0] = ( minutesTemp / 10 ) % 10 + '0';
+            minuteString[1] = minutesTemp % 10 + '0';
             minuteString[2] = '\0';
 
             // Display Strings
@@ -290,26 +312,31 @@ void main(void)
             Graphics_drawStringCentered(&g_sContext, "Edit minutes", AUTO_STRING_LENGTH, 48, 25, TRANSPARENT_TEXT);
             Graphics_drawStringCentered(&g_sContext, minuteString, AUTO_STRING_LENGTH, 48, 45, TRANSPARENT_TEXT);
             Graphics_flushBuffer(&g_sContext);
+
+            // update seconds global and return to display
+            if (currButton == 1){
+                state = display;
+                currButton = NULL;
+                long unsigned int days, hours, min, sec;
+                getTime(&days, &hours, &min, &sec);
+                seconds = days * secondsInDay + hours * secondsInHour + minutesTemp * secondsInMinute + sec - 3;
+            }
             break;
 
         case secondS:
             currButton = readButtons();
-            if (currButton == 1){
-                state = display;
-                currButton = NULL;
-            }
             if(currButton == 2){
                 state = monthS;
                 currButton = NULL;
             }
             // update milliamps variable
             getCurrent(&milliamps);
-            int seconds = (int) (milliamps * (59/ 99.9));
+            long unsigned int secondsTemp = (int) (milliamps * (59/ 99.9));
             char secondString[3];
 
             // Make strings
-            secondString[0] = ( seconds / 10 ) % 10 + '0';
-            secondString[1] = seconds % 10 + '0';
+            secondString[0] = ( secondsTemp / 10 ) % 10 + '0';
+            secondString[1] = secondsTemp % 10 + '0';
             secondString[2] = '\0';
 
             // Display Strings
@@ -317,7 +344,17 @@ void main(void)
             Graphics_drawStringCentered(&g_sContext, "Edit seconds", AUTO_STRING_LENGTH, 48, 25, TRANSPARENT_TEXT);
             Graphics_drawStringCentered(&g_sContext, secondString, AUTO_STRING_LENGTH, 48, 45, TRANSPARENT_TEXT);
             Graphics_flushBuffer(&g_sContext);
+
+            // update seconds global and return to display
+            if (currButton == 1){
+                state = display;
+                currButton = NULL;
+                long unsigned int days, hours, min, sec;
+                getTime(&days, &hours, &min, &sec);
+                seconds = days * secondsInDay + hours * secondsInHour + min * secondsInMinute + secondsTemp - 3;
+            }
             break;
+
 
         } // end of switch
 
@@ -402,6 +439,144 @@ char* getMonth(int monthNumber){
 
     return monthStr;
 }
+
+// given an amount of days, it returns the amount of seconds up to that month
+// i.e. given Feb 6, will return the amount of seconds up to february 1st
+long unsigned int getMonthSeconds(long unsigned int days){
+    int month = 0; // months from 0 to 11
+
+    if(days <= daysTilJanEnd){
+    }else if(days > daysTilJanEnd && days <= daysTilFebEnd){
+        month = 1;
+        days = days - daysTilJanEnd;
+    }else if(days > daysTilFebEnd && days <= daysTilMarEnd){
+        month = 2;
+        days = days - daysTilFebEnd;
+    }else if(days > daysTilMarEnd && days <= daysTilAprEnd){
+        month = 3;
+        days = days - daysTilMarEnd;
+    }else if(days > daysTilAprEnd && days <= 151){
+        month = 4;
+        days = days - daysTilAprEnd;
+    }else if(days > 151 && days <= 181){
+        month = 5;
+        days = days - 151;
+    }else if(days > 181 && days <= 212){
+        month = 6;
+        days = days - 181;
+    }else if(days > 212 && days <= 243){
+        month = 7;
+        days = days - 212;
+    }else if(days > 243 && days <= 273){
+        month = 8;
+        days = days - 243;
+    }else if(days > 273 && days <= 304){
+        month = 9;
+        days = days - 273;
+    }else if(days > 304 && days <= 334){
+        month = 10;
+        days = days - 304;
+    }else if(days > 334 && days <= 365){
+        month = 11;
+        days = days - 334;
+    }else{
+        month = 9999;
+        days = 0;
+    }
+
+    long unsigned int seconds = 0;
+
+    switch(month-1){
+    case 11: // dec
+        seconds += 31 * (secondsInDay);
+    case 10:
+        seconds += 30 * (secondsInDay);
+    case 9:
+        seconds += 31 * (secondsInDay);
+    case 8:
+        seconds += 30 * (secondsInDay);
+    case 7:
+        seconds += 31 * (secondsInDay);
+    case 6:
+        seconds += 31 * (secondsInDay);
+    case 5: // jun
+        seconds += 30 * (secondsInDay);
+    case 4: // may
+        seconds += 31 * (secondsInDay);
+    case 3:
+        seconds += 30 * (secondsInDay);
+    case 2:
+        seconds += 31 * (secondsInDay);
+    case 1:
+        seconds += 28 * (secondsInDay);
+    case 0:
+        seconds += 31 * (secondsInDay);
+    default:
+        break;
+
+    }// end of switch
+
+    return seconds;
+}
+
+// given an amount of days, it returns the amount of seconds up to that month
+// i.e. given Feb 6, will return the amount of seconds up to february 1st
+long unsigned int getMonthSeconds2(long unsigned int month){
+    // MONTH IS FROM 0 TO 11
+
+    long unsigned int secondsInMonth = 0;
+
+    switch(month-1){
+    case 12: // dec
+        secondsInMonth += 31 * (secondsInDay);
+    case 11:
+        secondsInMonth += 30 * (secondsInDay);
+    case 10:
+        secondsInMonth += 31 * (secondsInDay);
+    case 9:
+        secondsInMonth += 30 * (secondsInDay);
+    case 8:
+        secondsInMonth += 31 * (secondsInDay);
+    case 7:
+        secondsInMonth += 31 * (secondsInDay);
+    case 6: // jun
+        secondsInMonth += 30 * (secondsInDay);
+    case 5: // may
+        secondsInMonth += 31 * (secondsInDay);
+    case 4:
+        secondsInMonth += 30 * (secondsInDay);
+    case 3:
+        secondsInMonth += 31 * (secondsInDay);
+    case 2:
+        secondsInMonth += (long unsigned int) 28 * (long unsigned int) (secondsInDay);
+    case 1:
+        secondsInMonth += (long unsigned int)31 * (long unsigned int)(secondsInDay); // TODO THIS MULTIPLICATION IS OFF ASK
+    default:
+        break;
+
+    }// end of switch
+
+    return secondsInMonth;
+}
+
+
+
+void getTime(long unsigned int* days,long unsigned int* hours, long unsigned int* min, long unsigned int* sec){
+    long unsigned int currSeconds;
+
+    // save our current time
+    currSeconds = seconds;
+
+    *days = (int)(currSeconds / secondsInDay) % daysInYear;
+
+    *hours = (int)(currSeconds / secondsInHour) % hoursInDays;
+
+    *min = (int)(currSeconds / secondsInMinute) % minutesInHour;
+
+    *sec = (int)(currSeconds % secondsInMinute);
+
+}
+
 
 void displayTime(long unsigned int seconds){
     long unsigned int days, hours, min, sec, currSeconds;
@@ -529,7 +704,7 @@ char * makeDate(unsigned int days, char str[]){
     }
     date[3] = ' ';
     date[4] = (int)(days / 10) % 10 + '0';
-    date[5] = days % 10 + 1 + '0'; // plus one because first day is 1 not 0
+    date[5] = days % 9 + 1 + '0'; // plus one because first day is 1 not 0
     date[6] = '\0';
 
     memcpy(str, date, strlen(date)+1);
