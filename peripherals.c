@@ -102,6 +102,24 @@ void BuzzerOff(void)
     TB0CCTL5 = 0;
 }
 
+void initPushButons(void){
+    P1SEL &= ~BIT1;
+    P1DIR &= ~BIT1;
+    P1REN |= BIT1;
+    P1OUT |= BIT1;
+
+    P2SEL &= ~BIT1;
+    P2DIR &= ~BIT1;
+    P2REN |= BIT1;
+    P2OUT |= BIT1;
+}
+
+bool readButtons(void){
+    if((P1IN & BIT1) == 0)
+        return true;
+    if((P2IN & BIT1) == 0)
+        return false;
+}
 
 void configKeypad(void)
 {
