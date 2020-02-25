@@ -34,6 +34,7 @@ long unsigned int startTime = 0;
 long unsigned int currentTime = 0;
 int i;
 long unsigned int seconds;
+int currButton;
 
 // variables here
 char date[7] = {0};
@@ -63,7 +64,7 @@ char date[7] = {0};
 
 unsigned int in_temp, in_current;
 
-enum LCD_STATE {display = 0, edit = 1};
+enum LCD_STATE {monthS = 0, dayS =1, hourS=2, minuteS=3, secondS=4, display = 5};
 
 // Main
 void main(void)
@@ -77,6 +78,7 @@ void main(void)
     initLeds();
     configDisplay();
     configKeypad();
+    initPushButons();
 
     enum LCD_STATE state = display;
 	
@@ -93,7 +95,6 @@ void main(void)
     REFCTL0 &= ~REFMSTR;    // Reset REFMSTR to hand over control of
                             // internal reference voltages to
                             // ADC12_A control registers
-//    ADC12CTL0 = ADC12SHT0_9 | ADC12REFON | ADC12ON | ADC12MSC;     // Internal ref = 1.5V (TODOOOOOOOO UNCOMMENT LATEEER)
     ADC12CTL0 = ADC12SHT0_9 | ADC12REFON | ADC12ON | ADC12MSC;     // Internal ref = 1.5V
 
     ADC12CTL1 = ADC12SHP | ADC12CONSEQ_1;                     // Enable sample timer
@@ -117,64 +118,290 @@ void main(void)
 //    seconds = 3500000;
     seconds = 57;
 
-
     runTimerA2();
     startTime = timer_cnt;
 
     while (1)    // Forever loop
     {
-
-        currentTime = timer_cnt;
-        // check that one second has elapsed
-        if(currentTime > startTime + 1){
-            // calculate temp of the last 36 seconds since one second has passed
-            ADC12CTL0 &= ~ADC12SC;  // clear the start bit
-            ADC12CTL0 |= ADC12SC;       // Sampling and conversion start
-                                // Single conversion (single channel)
-            // Poll busy bit waiting for conversion to complete
-            while (ADC12CTL1 & ADC12BUSY)
-                __no_operation();
-	    in_current = ADC12MEM0;
-            in_temp = ADC12MEM1;      // Read in results if conversion
-
-            // Temperature in Celsius. See the Device Descriptor Table section in the
-            // System Resets, Interrupts, and Operating Modes, System Control Module
-            // chapter in the device user's guide for background information on the
-            // formula.
-            temperatureDegC = (float)((long)in_temp - CALADC12_15V_30C) * degC_per_bit +30.0;
-
-	    milliamps = ((float)in_current) * MA_PER_BIT;
-		
-            // Temperature in Fahrenheit
-            //temperatureDegF = (temperatureDegC * 1.8) + 32;  //conversion formula for celcius to fahrenheit
-            __no_operation();
-
-            temperatureAvg[tempAvgIndex%36] = temperatureDegC;
-            tempAvgIndex++;
-        }
-        // check that three seconds have passed
-        if(currentTime > startTime + 3){
-            startTime = timer_cnt;
-            seconds+= 3;
-
-            // calculate average of last 36 readings
-            float avgTemp = 0;
-            for (tempIndex = 0; tempIndex < sizeof(temperatureAvg) / sizeof(temperatureAvg[0]); tempIndex++){
-                avgTemp += temperatureAvg[tempIndex];
+        switch(state){
+        case display:
+            currButton = readButtons();
+            if (currButton == 2){
+                state = monthS;
+                currButton = NULL;
             }
-            avgTemp /= 36;
+            currentTime = timer_cnt;
+            // check that one second has elapsed
+            if(currentTime > startTime + 1){
+                // calculate temp of the last 36 seconds since one second has passed
+                ADC12CTL0 &= ~ADC12SC;  // clear the start bit
+                ADC12CTL0 |= ADC12SC;       // Sampling and conversion start
+                                    // Single conversion (single channel)
+                // Poll busy bit waiting for conversion to complete
+                while (ADC12CTL1 & ADC12BUSY)
+                    __no_operation();
+                in_current = ADC12MEM0;
+                in_temp = ADC12MEM1;      // Read in results if conversion
 
-            // Display temp and time
+                // Temperature in Celsius. See the Device Descriptor Table section in the
+                // System Resets, Interrupts, and Operating Modes, System Control Module
+                // chapter in the device user's guide for background information on the
+                // formula.
+                temperatureDegC = (float)((long)in_temp - CALADC12_15V_30C) * degC_per_bit +30.0;
+
+//                milliamps = ((float)in_current) * MA_PER_BIT;
+
+                // Temperature in Fahrenheit
+                //temperatureDegF = (temperatureDegC * 1.8) + 32;  //conversion formula for celcius to fahrenheit
+                __no_operation();
+
+                temperatureAvg[tempAvgIndex%36] = temperatureDegC;
+                tempAvgIndex++;
+            }
+            // check that three seconds have passed
+            if(currentTime > startTime + 3){
+                startTime = timer_cnt;
+                seconds+= 3;
+
+                // calculate average of last 36 readings
+                float avgTemp = 0;
+                for (tempIndex = 0; tempIndex < sizeof(temperatureAvg) / sizeof(temperatureAvg[0]); tempIndex++){
+                    avgTemp += temperatureAvg[tempIndex];
+                }
+                avgTemp /= 36;
+
+                // Display temp and time
+                Graphics_clearDisplay(&g_sContext); // Clear the display
+                displayTemp(&avgTemp);
+                displayTime(seconds);
+                Graphics_flushBuffer(&g_sContext);
+
+            }// end if statement
+            break;
+
+        case monthS:
+            currButton = readButtons();
+            if (currButton == 1){
+                state = display;
+                currButton = NULL;
+            }
+            if(currButton == 2){
+                state = dayS;
+                currButton = NULL;
+            }
+
+            // update milliamps variable
+            getCurrent(&milliamps);
+            int month = (int) (milliamps * (11/ 99.9) + 1);
+            char monthString[4];
+
+            // Make strings
+            // makeDate(days, date);
+            memcpy(monthString, getMonth(month), 4+1);
+
+            // Display Strings
             Graphics_clearDisplay(&g_sContext); // Clear the display
-            displayTemp(&avgTemp);
-            displayTime(seconds);
+            Graphics_drawStringCentered(&g_sContext, "Edit months", AUTO_STRING_LENGTH, 48, 25, TRANSPARENT_TEXT);
+            Graphics_drawStringCentered(&g_sContext, monthString, AUTO_STRING_LENGTH, 48, 45, TRANSPARENT_TEXT);
             Graphics_flushBuffer(&g_sContext);
+            break;
 
-        }// end if statement
+        case dayS:
+            currButton = readButtons();
+            if (currButton == 1){
+                state = display;
+                currButton = NULL;
+            }
+            if(currButton == 2){
+                state = hourS;
+                currButton = NULL;
+            }
+
+            // update milliamps variable
+            getCurrent(&milliamps);
+            int days = (int) (milliamps * (30/ 99.9) + 1);
+            char dayString[3];
+
+            // Make strings
+            dayString[0] = ( days / 10 ) % 10 + '0';
+            dayString[1] = days % 10 + '0';
+            dayString[2] = '\0';
+
+            // Display Strings
+            Graphics_clearDisplay(&g_sContext); // Clear the display
+            Graphics_drawStringCentered(&g_sContext, "Edit days", AUTO_STRING_LENGTH, 48, 25, TRANSPARENT_TEXT);
+            Graphics_drawStringCentered(&g_sContext, dayString, AUTO_STRING_LENGTH, 48, 45, TRANSPARENT_TEXT);
+            Graphics_flushBuffer(&g_sContext);
+            break;
+
+
+        case hourS:
+            currButton = readButtons();
+            if (currButton == 1){
+                state = display;
+                currButton = NULL;
+            }
+            if(currButton == 2){
+                state = minuteS;
+                currButton = NULL;
+            }
+
+            // update milliamps variable
+            getCurrent(&milliamps);
+            int hours = (int) (milliamps * (23/ 99.9));
+            char hourString[3];
+
+            // Make strings
+            hourString[0] = ( hours / 10 ) % 10 + '0';
+            hourString[1] = hours % 10 + '0';
+            hourString[2] = '\0';
+
+            // Display Strings
+            Graphics_clearDisplay(&g_sContext); // Clear the display
+            Graphics_drawStringCentered(&g_sContext, "Edit hours", AUTO_STRING_LENGTH, 48, 25, TRANSPARENT_TEXT);
+            Graphics_drawStringCentered(&g_sContext, hourString, AUTO_STRING_LENGTH, 48, 45, TRANSPARENT_TEXT);
+            Graphics_flushBuffer(&g_sContext);
+            break;
+
+
+        case minuteS:
+            currButton = readButtons();
+            if (currButton == 1){
+                state = display;
+                currButton = NULL;
+            }
+            if(currButton == 2){
+                state = secondS;
+                currButton = NULL;
+            }
+
+            // update milliamps variable
+            getCurrent(&milliamps);
+            int minutes = (int) (milliamps * (59/ 99.9));
+            char minuteString[3];
+
+            // Make strings
+            minuteString[0] = ( minutes / 10 ) % 10 + '0';
+            minuteString[1] = minutes % 10 + '0';
+            minuteString[2] = '\0';
+
+            // Display Strings
+            Graphics_clearDisplay(&g_sContext); // Clear the display
+            Graphics_drawStringCentered(&g_sContext, "Edit minutes", AUTO_STRING_LENGTH, 48, 25, TRANSPARENT_TEXT);
+            Graphics_drawStringCentered(&g_sContext, minuteString, AUTO_STRING_LENGTH, 48, 45, TRANSPARENT_TEXT);
+            Graphics_flushBuffer(&g_sContext);
+            break;
+
+        case secondS:
+            currButton = readButtons();
+            if (currButton == 1){
+                state = display;
+                currButton = NULL;
+            }
+            if(currButton == 2){
+                state = monthS;
+                currButton = NULL;
+            }
+            // update milliamps variable
+            getCurrent(&milliamps);
+            int seconds = (int) (milliamps * (59/ 99.9));
+            char secondString[3];
+
+            // Make strings
+            secondString[0] = ( seconds / 10 ) % 10 + '0';
+            secondString[1] = seconds % 10 + '0';
+            secondString[2] = '\0';
+
+            // Display Strings
+            Graphics_clearDisplay(&g_sContext); // Clear the display
+            Graphics_drawStringCentered(&g_sContext, "Edit seconds", AUTO_STRING_LENGTH, 48, 25, TRANSPARENT_TEXT);
+            Graphics_drawStringCentered(&g_sContext, secondString, AUTO_STRING_LENGTH, 48, 45, TRANSPARENT_TEXT);
+            Graphics_flushBuffer(&g_sContext);
+            break;
+
+        } // end of switch
+
 
 
     }  // end while (1)
 }   //end main
+
+// updates milliamps current
+void getCurrent(float * milliamps){
+
+    ADC12CTL0 &= ~ADC12SC;  // clear the start bit
+    ADC12CTL0 |= ADC12SC;       // Sampling and conversion start
+                        // Single conversion (single channel)
+    // Poll busy bit waiting for conversion to complete
+    while (ADC12CTL1 & ADC12BUSY)
+        __no_operation();
+    in_current = ADC12MEM0;
+    in_temp = ADC12MEM1;      // Read in results if conversion
+
+    *milliamps = ((float)in_current) * MA_PER_BIT;
+
+    __no_operation();
+
+//    return current;
+}
+
+// returns month string, given a number from 1 to 12
+char* getMonth(int monthNumber){
+    char monthStr[4];
+
+    if(monthNumber == 1){
+        monthStr[0] = 'J';
+        monthStr[1] = 'A';
+        monthStr[2] = 'N';
+    }else if(monthNumber == 2){
+        monthStr[0] = 'F';
+        monthStr[1] = 'E';
+        monthStr[2] = 'B';
+    }else if(monthNumber == 3){
+        monthStr[0] = 'M';
+        monthStr[1] = 'A';
+        monthStr[2] = 'R';
+    }else if(monthNumber == 4){
+        monthStr[0] = 'A';
+        monthStr[1] = 'P';
+        monthStr[2] = 'R';
+    }else if(monthNumber == 5){
+        monthStr[0] = 'M';
+        monthStr[1] = 'A';
+        monthStr[2] = 'Y';
+    }else if(monthNumber == 6){
+        monthStr[0] = 'J';
+        monthStr[1] = 'U';
+        monthStr[2] = 'N';
+    }else if(monthNumber == 7){
+        monthStr[0] = 'J';
+        monthStr[1] = 'U';
+        monthStr[2] = 'L';
+    }else if(monthNumber == 8){
+        monthStr[0] = 'A';
+        monthStr[1] = 'U';
+        monthStr[2] = 'G';
+    }else if(monthNumber == 9){
+        monthStr[0] = 'S';
+        monthStr[1] = 'E';
+        monthStr[2] = 'P';
+    }else if(monthNumber == 10){
+        monthStr[0] = 'O';
+        monthStr[1] = 'C';
+        monthStr[2] = 'T';
+    }else if(monthNumber == 11){
+        monthStr[0] = 'N';
+        monthStr[1] = 'O';
+        monthStr[2] = 'V';
+    }else if(monthNumber == 12){
+        monthStr[0] = 'D';
+        monthStr[1] = 'E';
+        monthStr[2] = 'C';
+    }
+    monthStr[3]='\0';
+
+    return monthStr;
+}
 
 void displayTime(long unsigned int seconds){
     long unsigned int days, hours, min, sec, currSeconds;
@@ -207,7 +434,6 @@ void displayTime(long unsigned int seconds){
 //    Graphics_flushBuffer(&g_sContext);
 
 }
-
 
 void displayTemp(float* inAvgTempC){
 
@@ -313,7 +539,6 @@ char * makeDate(unsigned int days, char str[]){
     return date;
 }
 
-
 char * makeTime(long unsigned int hours, long unsigned int min, long unsigned int sec)
 {
     char time[9];
@@ -351,7 +576,6 @@ char * makeTemp(float* temp, bool isCelsius)
 
     return tempString;
 }
-
 
 void swDelay(char numLoops)
 {

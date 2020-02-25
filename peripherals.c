@@ -114,11 +114,12 @@ void initPushButons(void){
     P2OUT |= BIT1;
 }
 
-bool readButtons(void){
+int readButtons(void){
     if((P1IN & BIT1) == 0)
-        return true;
+        return 1;
     if((P2IN & BIT1) == 0)
-        return false;
+        return 2;
+    return 0;
 }
 
 void configKeypad(void)
