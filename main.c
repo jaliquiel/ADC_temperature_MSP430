@@ -2,6 +2,10 @@
 /**************  13 March 2019   ******************/
 /***************************************************/
 
+
+
+
+
 #include <msp430.h>
 
 /* Peripherals.c and .h are where the functions that implement
@@ -18,7 +22,7 @@
 
 // Function Prototypes
 void swDelay(char numLoops);
-//void getMonth(unsigned int days, char *s);
+//void makeDate(unsigned int days, char *s);
 //void displayTime(long unsigned int seconds);
 //void displayTemp(float inAvgTempC);
 //void makeDate(long unsigned int month, long unsigned int days, char *s);
@@ -26,6 +30,8 @@ void swDelay(char numLoops);
 
 // Declare globals here
 long unsigned int timer_cnt = 0;
+long unsigned int startTime = 0;
+long unsigned int currentTime = 0;
 int i;
 long unsigned int seconds;
 
@@ -59,6 +65,8 @@ void main(void)
 
 {
     WDTCTL = WDTPW | WDTHOLD;    // Stop watchdog timer. Always need to stop this!!
+    __bis_SR_register(GIE); // Global INterrupt enable
+
 
     // Useful code starts here
     initLeds();
@@ -66,6 +74,9 @@ void main(void)
     configKeypad();
 
     // set up temperature sensor *****************************************************
+    float temperatureAvg [36] = {0};
+    int tempAvgIndex = 0;
+    int tempIndex = 0;
     volatile float temperatureDegC;
     volatile float temperatureDegF;
     volatile float degC_per_bit;
@@ -96,32 +107,54 @@ void main(void)
     seconds = 3500000;
 
     runTimerA2();
+    startTime = timer_cnt;
 
     while (1)    // Forever loop
     {
-        Graphics_clearDisplay(&g_sContext); // Clear the display
-        seconds++;
-        displayTime(seconds);
-//        displayTemp(in_temp);
 
+        currentTime = timer_cnt;
+        // check that one second has elapsed
+        if(currentTime > startTime + 3){
+            startTime = timer_cnt;
+            seconds+= 3;
 
-        ADC12CTL0 &= ~ADC12SC;  // clear the start bit
-        ADC12CTL0 |= ADC12SC;       // Sampling and conversion start
-                            // Single conversion (single channel)
-        // Poll busy bit waiting for conversion to complete
-        while (ADC12CTL1 & ADC12BUSY)
+            // calculate temp of the last 36 seconds since one second has passed
+            ADC12CTL0 &= ~ADC12SC;  // clear the start bit
+            ADC12CTL0 |= ADC12SC;       // Sampling and conversion start
+                                // Single conversion (single channel)
+            // Poll busy bit waiting for conversion to complete
+            while (ADC12CTL1 & ADC12BUSY)
+                __no_operation();
+            in_temp = ADC12MEM0;      // Read in results if conversion
+
+            // Temperature in Celsius. See the Device Descriptor Table section in the
+            // System Resets, Interrupts, and Operating Modes, System Control Module
+            // chapter in the device user's guide for background information on the
+            // formula.
+            temperatureDegC = (float)((long)in_temp - CALADC12_15V_30C) * degC_per_bit +30.0;
+
+    //        // Temperature in Fahrenheit
+    //        temperatureDegF = (temperatureDegC * 1.8) + 32;  //conversion formula for celcius to fahrenheit
             __no_operation();
-        in_temp = ADC12MEM0;      // Read in results if conversion
 
-        // Temperature in Celsius. See the Device Descriptor Table section in the
-        // System Resets, Interrupts, and Operating Modes, System Control Module
-        // chapter in the device user's guide for background information on the
-        // formula.
-        temperatureDegC = (float)((long)in_temp - CALADC12_15V_30C) * degC_per_bit +30.0;
+            temperatureAvg[tempAvgIndex%36] = temperatureDegC;
+            tempAvgIndex++;
 
-//        // Temperature in Fahrenheit
-//        temperatureDegF = (temperatureDegC * 1.8) + 32;  //conversion formula for celcius to fahrenheit
-        __no_operation();
+            // only come here once
+            // calculate average of last 36 readings
+            float avgTemp = 0;
+            for (tempIndex = 0; tempIndex < sizeof(temperatureAvg) / sizeof(temperatureAvg[0]); tempIndex++){
+                avgTemp += temperatureAvg[tempIndex];
+            }
+            avgTemp /= 36;
+            printf("%d",avgTemp);
+
+            Graphics_clearDisplay(&g_sContext); // Clear the display
+            displayTime(seconds);
+
+        }
+
+//        displayTemp(in_temp);
 
 
     }  // end while (1)
@@ -145,33 +178,22 @@ void displayTime(long unsigned int seconds){
     sec = (int)(currSeconds % secondsInMinute);
 
     // Make strings
-    // getMonth(days, date);
-    memcpy(date, getMonth(days, date), 8);
+    // makeDate(days, date);
+    memcpy(date, makeDate(days, date), 7+1);
 
     //makeDate(days, date);
-//    memcpy(date, getMonth(days, date), 8);
-//
-//    makeTime(hours, min, sec, time);
+    memcpy(time, makeTime(hours, min, sec), 9+1);
 
-//    char a[7] = "AUG 10\0";
-    char t[9] = "08:45:00";
 
     // Display Strings
-
     Graphics_drawStringCentered(&g_sContext, date, AUTO_STRING_LENGTH, 48, 35, TRANSPARENT_TEXT);
-    Graphics_drawStringCentered(&g_sContext, t, AUTO_STRING_LENGTH, 48, 45, TRANSPARENT_TEXT);
+    Graphics_drawStringCentered(&g_sContext, time, AUTO_STRING_LENGTH, 48, 45, TRANSPARENT_TEXT);
     Graphics_flushBuffer(&g_sContext);
 
-    //refreshes display
-    if(elapsedSec >= 3){
-        Graphics_flushBuffer(&g_sContext);
-        stopTimerA2(1);
-    }
 }
 
 
 void displayTemp(float inAvgTempC){
-
     inAvgTempC = configADC();
 
     char cString[8];
@@ -192,10 +214,9 @@ void displayTemp(float inAvgTempC){
     Graphics_drawStringCentered(&g_sContext, fString, AUTO_STRING_LENGTH, 48, 65, TRANSPARENT_TEXT);
     //refreshes display
     Graphics_flushBuffer(&g_sContext);
-
 }
 
-char * getMonth(unsigned int days, char str[]){
+char * makeDate(unsigned int days, char str[]){
 
     char date[7];
 
@@ -273,19 +294,22 @@ char * getMonth(unsigned int days, char str[]){
     return date;
 }
 
-// String functions
-//void makeDate(long unsigned int days, char *date[7]){
-//    date[3] = ' ';
-//    date[4] = (int)(days / 10) % 10 + '0';
-//    date[5] = days % 10 + '0';
-//    date[6] = '\0';
-//}
 
-void makeTime(long unsigned int hours, long unsigned int min, long unsigned int sec, char *s)
+char * makeTime(long unsigned int hours, long unsigned int min, long unsigned int sec)
 {
-    char hourString[3];
-    char minString[3];
-    char secString[3];
+    char time[9];
+    // example: "08:45:00";
+    time[0] = (int)(hours / 10) % 10 + '0';
+    time[1] = hours % 10 + '0';
+    time[2] = ':';
+    time[3] = (int)(min / 10) % 10 + '0';
+    time[4] = min % 10 + '0';
+    time[5] = ':';
+    time[6] = (int)(sec / 10) % 10 + '0';
+    time[7] = sec % 10 + '0';
+    time[8] = '\0';
+
+    return time;
 }
 
 //void makeTemp(float temperature, char * s, bool isCelsius)
@@ -304,49 +328,49 @@ void makeTime(long unsigned int hours, long unsigned int min, long unsigned int 
 //    s[7] = '\0';
 //}
 
-float configADC(void){
-    volatile float temperatureDegC;
-    volatile float temperatureDegF;
-    volatile float degC_per_bit;
-    volatile unsigned int bits30, bits85;
-
-    REFCTL0 &= ~REFMSTR;    // Reset REFMSTR to hand over control of
-                            // internal reference voltages to
-                            // ADC12_A control registers
-    ADC12CTL0 = ADC12SHT0_9 | ADC12REFON | ADC12ON;     // Internal ref = 1.5V
-    ADC12CTL1 = ADC12SHP;                     // Enable sample timer
-    // Using ADC12MEM0 to store reading
-    ADC12MCTL0 = ADC12SREF_1 + ADC12INCH_10;  // ADC i/p ch A10 = temp sense
-                                              // ACD12SREF_1 = internal ref = 1.5v
-    __delay_cycles(100);                    // delay to allow Ref to settle
-    ADC12CTL0 |= ADC12ENC;              // Enable conversion
-    // Use calibration data stored in info memory
-    bits30 = CALADC12_15V_30C;
-    bits85 = CALADC12_15V_85C;
-    degC_per_bit = ((float)(85.0 - 30.0))/((float)(bits85-bits30));
-
-    while(1){
-        ADC12CTL0 &= ~ADC12SC;  // clear the start bit
-        ADC12CTL0 |= ADC12SC;       // Sampling and conversion start
-                            // Single conversion (single channel)
-        // Poll busy bit waiting for conversion to complete
-        while (ADC12CTL1 & ADC12BUSY)
-            __no_operation();
-        in_temp = ADC12MEM0;      // Read in results if conversion
-
-        // Temperature in Celsius. See the Device Descriptor Table section in the
-        // System Resets, Interrupts, and Operating Modes, System Control Module
-        // chapter in the device user's guide for background information on the
-        // formula.
-        temperatureDegC = (float)((long)in_temp - CALADC12_15V_30C) * degC_per_bit +30.0;
-
-//        // Temperature in Fahrenheit
-//        temperatureDegF = (temperatureDegC * 1.8) + 32;  //conversion formula for celcius to fahrenheit
-
-        __no_operation();                       // SET BREAKPOINT HERE
-      }
-    return temperatureDegC;
-}
+//float configADC(void){
+//    volatile float temperatureDegC;
+//    volatile float temperatureDegF;
+//    volatile float degC_per_bit;
+//    volatile unsigned int bits30, bits85;
+//
+//    REFCTL0 &= ~REFMSTR;    // Reset REFMSTR to hand over control of
+//                            // internal reference voltages to
+//                            // ADC12_A control registers
+//    ADC12CTL0 = ADC12SHT0_9 | ADC12REFON | ADC12ON;     // Internal ref = 1.5V
+//    ADC12CTL1 = ADC12SHP;                     // Enable sample timer
+//    // Using ADC12MEM0 to store reading
+//    ADC12MCTL0 = ADC12SREF_1 + ADC12INCH_10;  // ADC i/p ch A10 = temp sense
+//                                              // ACD12SREF_1 = internal ref = 1.5v
+//    __delay_cycles(100);                    // delay to allow Ref to settle
+//    ADC12CTL0 |= ADC12ENC;              // Enable conversion
+//    // Use calibration data stored in info memory
+//    bits30 = CALADC12_15V_30C;
+//    bits85 = CALADC12_15V_85C;
+//    degC_per_bit = ((float)(85.0 - 30.0))/((float)(bits85-bits30));
+//
+//    while(1){
+//        ADC12CTL0 &= ~ADC12SC;  // clear the start bit
+//        ADC12CTL0 |= ADC12SC;       // Sampling and conversion start
+//                            // Single conversion (single channel)
+//        // Poll busy bit waiting for conversion to complete
+//        while (ADC12CTL1 & ADC12BUSY)
+//            __no_operation();
+//        in_temp = ADC12MEM0;      // Read in results if conversion
+//
+//        // Temperature in Celsius. See the Device Descriptor Table section in the
+//        // System Resets, Interrupts, and Operating Modes, System Control Module
+//        // chapter in the device user's guide for background information on the
+//        // formula.
+//        temperatureDegC = (float)((long)in_temp - CALADC12_15V_30C) * degC_per_bit +30.0;
+//
+////        // Temperature in Fahrenheit
+////        temperatureDegF = (temperatureDegC * 1.8) + 32;  //conversion formula for celcius to fahrenheit
+//
+//        __no_operation();                       // SET BREAKPOINT HERE
+//      }
+//    return temperatureDegC;
+//}
 
 void swDelay(char numLoops)
 {
