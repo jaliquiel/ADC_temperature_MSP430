@@ -214,8 +214,9 @@ void main(void)
                 currButton = NULL;
                 long unsigned int days, hours, min, sec;
                 getTime(&days, &hours, &min, &sec);
-                long unsigned int temp = getMonthSeconds2(monthTemp); // 2670400
-                seconds = getMonthSeconds2(monthTemp) + (days - 1) * secondsInDay + hours * secondsInHour + min * secondsInMinute + sec - 3;
+                long unsigned int temp;
+                getMonthSeconds2(monthTemp, &temp); // 2670400
+                seconds = temp + (days) * secondsInDay + hours * secondsInHour + min * secondsInMinute + sec - 3;
             }
             break;
 
@@ -521,7 +522,7 @@ long unsigned int getMonthSeconds(long unsigned int days){
 
 // given an amount of days, it returns the amount of seconds up to that month
 // i.e. given Feb 6, will return the amount of seconds up to february 1st
-long unsigned int getMonthSeconds2(long unsigned int month){
+void getMonthSeconds2(long unsigned int month, long unsigned int* temp){
     // MONTH IS FROM 0 TO 11
 
     long unsigned int secondsInMonth = 0;
@@ -556,7 +557,9 @@ long unsigned int getMonthSeconds2(long unsigned int month){
 
     }// end of switch
 
-    return secondsInMonth;
+    *temp = secondsInMonth;
+
+//    return secondsInMonth;
 }
 
 
@@ -591,7 +594,8 @@ void displayTime(long unsigned int seconds){
 
     hours = (int)(currSeconds / secondsInHour) % hoursInDays;
 
-    min = (int)(currSeconds / secondsInMinute) % minutesInHour;
+    min = (currSeconds / 60);
+    min %= 60;
 
     sec = (int)(currSeconds % secondsInMinute);
 
@@ -637,7 +641,7 @@ void displayTemp(float* inAvgTempC){
 }
 
 char * makeDate(unsigned int days, char str[]){
-
+    days += 1; // because days start at 0 instead of 1
     char date[7];
 
     if(days <= daysTilJanEnd){
@@ -703,8 +707,10 @@ char * makeDate(unsigned int days, char str[]){
         days = 0;
     }
     date[3] = ' ';
+
+
     date[4] = (int)(days / 10) % 10 + '0';
-    date[5] = days % 9 + 1 + '0'; // plus one because first day is 1 not 0
+    date[5] = (days % 10) + '0'; // plus one because first day is 1 not 0
     date[6] = '\0';
 
     memcpy(str, date, strlen(date)+1);
@@ -736,7 +742,8 @@ char * makeTemp(float* temp, bool isCelsius)
     char tempString[8];
     float temperature = *temp;
 
-    tempString[0] = (int)(temperature / 100.0) % 10 + '0';
+//    tempString[0] = (int)(temperature / 100.0) % 10 + '0';
+    tempString[0] = ' ';
     tempString[1] = (int)(temperature / 10.0) % 10 + '0';
     tempString[2] = (int)temperature % 10 + '0';
     tempString[3] = '.';
